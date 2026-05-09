@@ -1,0 +1,8 @@
+oqs.so
+vendor
+AI_RULES.md
+.ninja_log
+.run-stamp
+*.priv
+*.pub
+*.enc

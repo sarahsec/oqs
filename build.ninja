@@ -1,0 +1,60 @@
+ninja_required_version = 1.11
+
+lua = /usr/local/bin/lua
+cc = cc
+
+liboqs_git_url = https://github.com/open-quantum-safe/liboqs.git
+liboqs_git_ref = main
+liboqs_dir = vendor/liboqs
+liboqs_build_dir = $liboqs_dir/build
+liboqs_include = $liboqs_build_dir/include
+liboqs_lib = $liboqs_build_dir/lib/liboqs.a
+
+lua_include = /usr/local/include
+module = oqs.so
+src = src/oqs.c
+
+cflags = -O2 -fPIC -Wall -Wextra -Wpedantic -I$lua_include -I$liboqs_include
+ldflags = -shared
+libs = $liboqs_lib -lcrypto
+
+rule clone_liboqs
+  command = test -f $out || (mkdir -p vendor && git clone --branch $liboqs_git_ref --depth 1 $liboqs_git_url $liboqs_dir)
+  description = Cloning liboqs
+
+rule configure_liboqs
+  command = cmake -S $liboqs_dir -B $liboqs_build_dir -GNinja
+  description = Configuring liboqs with Ninja
+
+rule build_liboqs
+  command = ninja -C $liboqs_build_dir
+  description = Building liboqs with Ninja
+
+rule build_module
+  command = $cc $cflags $ldflags -o $out $in $libs
+  description = Building Lua module $out
+
+rule run_demo
+  command = $lua demo.lua
+  description = Running Lua demo
+
+rule run_test
+  command = $lua test.lua
+  description = Running oqs-cli integration tests
+
+rule run_prove
+  command = $lua prove.lua
+  description = Proving security properties
+
+build _always: phony
+
+build $liboqs_dir/.git/HEAD: clone_liboqs
+build $liboqs_build_dir/build.ninja: configure_liboqs $liboqs_dir/.git/HEAD
+build $liboqs_lib: build_liboqs $liboqs_build_dir/build.ninja
+build $module: build_module $src | $liboqs_lib
+build run: run_demo $module demo.lua | _always
+build test: run_test $module oqs-cli.lua test.lua | _always
+build prove: run_prove $module prove.lua | _always
+build cli: phony oqs-cli.lua oqs
+
+default $module
